@@ -39,13 +39,14 @@
 # Clone and setup
 git clone https://github.com/devoter-xyz/devoter-app
 cd devoter-voting
-npm install
+
+pnpm install
 
 # Setup database
-npx prisma db push
+npx dotenv -e .env.local -- npx prisma db push
 
 # Start development
-npm run dev
+pnpm dev
 ```
 
 ## 🔧 Environment Variables
@@ -60,13 +61,16 @@ THIRDWEB_SECRET_KEY=your_secret_key
 
 ```bash
 # View database in browser
-npx prisma studio
+npx dotenv -e .env.local -- npx prisma studio
 
 # Run database migrations
-npx prisma migrate dev
+npx dotenv -e .env.local -- npx prisma migrate dev
 
 # Reset database (development only)
-npx prisma migrate reset
+npx dotenv -e .env.local -- npx prisma migrate reset
+
+# Run database seeder
+npx dotenv -e .env.local -- ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts
 ```
 
 ## 🚀 Deployment
