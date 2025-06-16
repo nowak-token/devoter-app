@@ -1,6 +1,7 @@
 import { SignInPayload } from "@/actions/auth/signin/schema";
 import { verifySiweSignature } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { setSessionCookie } from '@/lib/session';
 import { User } from "@prisma/client";
 
 export type SigninResult = Pick<User, 'id' | 'walletAddress'> | null;
@@ -30,6 +31,10 @@ export async function signIn(payload: SignInPayload): Promise<SigninResult> {
       },
     });
   }
+
+  await setSessionCookie({
+    userId: user.id,
+  });
 
   return user;
 }

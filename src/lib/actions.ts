@@ -29,10 +29,6 @@ export const authActionClient = actionClient.use(async ({ next, ctx }) => {
     throw new Error('You are not logged in. Please try to login');
   }
 
-  if (session.expiresAt < Date.now()) {
-    throw new Error('Session expired. Please try to login again');
-  }
-  
   const userId = session?.userId;
 
   if (!userId) {

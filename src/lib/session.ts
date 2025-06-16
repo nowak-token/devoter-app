@@ -12,7 +12,6 @@ const key = Buffer.from(env.SESSION_ENCRYPTION_KEY.padEnd(32, '0').slice(0, 32))
 
 export type SessionData = {
   userId: string;
-  expiresAt: number;
 };
 
 export function encryptSession(data: SessionData): string {
