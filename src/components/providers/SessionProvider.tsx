@@ -1,15 +1,13 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { AuthSession, AuthUser } from '@/lib/auth';
+import { getUserFromSessionAction } from '@/actions/auth/session/action';
+import { GetUserFromSessionResult } from '@/actions/auth/session/logic';
+import { useAction } from 'next-safe-action/hooks';
+import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
 interface SessionContextType {
-  session: AuthSession | null;
-  user: AuthUser | null;
+  user: GetUserFromSessionResult | null;
   isLoading: boolean;
-  signIn: (message: string, signature: string, nonce: string) => Promise<boolean>;
-  signOut: () => Promise<void>;
-  refreshSession: () => Promise<void>;
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
@@ -19,90 +17,21 @@ interface SessionProviderProps {
 }
 
 export function SessionProvider({ children }: SessionProviderProps) {
-  const [session, setSession] = useState<AuthSession | null>(null);
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const fetchSession = async () => {
-    try {
-      const response = await fetch('/api/auth/session');
-      if (response.ok) {
-        const data = await response.json();
-        const sessionData: AuthSession = {
-          id: data.user.id,
-          address: data.user.address,
-          expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000), // 7 days
-        };
-        setSession(sessionData);
-        setUser(data.user);
-      } else {
-        setSession(null);
-        setUser(null);
-      }
-    } catch (error) {
-      console.error('Error fetching session:', error);
-      setSession(null);
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const signIn = async (message: string, signature: string, nonce: string): Promise<boolean> => {
-    try {
-      const response = await fetch('/api/auth/signin', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message, signature, nonce }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const sessionData: AuthSession = {
-          id: data.user.id,
-          address: data.user.address,
-          expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000), // 7 days
-        };
-        setSession(sessionData);
-        setUser(data.user);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Sign in error:', error);
-      return false;
-    }
-  };
-
-  const signOut = async (): Promise<void> => {
-    try {
-      await fetch('/api/auth/signout', {
-        method: 'POST',
-      });
-      setSession(null);
-      setUser(null);
-    } catch (error) {
-      console.error('Sign out error:', error);
-    }
-  };
-
-  const refreshSession = async (): Promise<void> => {
-    await fetchSession();
-  };
+  const [user, setUser] = useState<GetUserFromSessionResult | null>(null);
+  const { executeAsync: getUserFromSession, isExecuting } = useAction(getUserFromSessionAction);
 
   useEffect(() => {
-    fetchSession();
-  }, []);
+    getUserFromSession().then((result) => {
+      if (result?.data) {
+        setUser(result.data);
+      }
+    });
+  }, [getUserFromSession]);
+
 
   const value: SessionContextType = {
-    session,
     user,
-    isLoading,
-    signIn,
-    signOut,
-    refreshSession,
+    isLoading: isExecuting,
   };
 
   return (

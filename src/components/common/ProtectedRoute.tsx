@@ -2,8 +2,7 @@
 
 import { useSession } from '@/components/providers/SessionProvider';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 
 interface ProtectedRouteProps {
   children: ReactNode;

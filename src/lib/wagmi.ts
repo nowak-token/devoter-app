@@ -1,101 +1,91 @@
-import { createConfig, http } from 'wagmi';
+'use client';
+
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
+
 import {
-  mainnet,
-  polygon,
-  optimism,
-  arbitrum,
-  base,
-} from 'wagmi/chains';
-import {
-  metaMaskWallet,
-  walletConnectWallet,
   coinbaseWallet,
+  injectedWallet,
+  metaMaskWallet,
   rainbowWallet,
-  trustWallet,
-  braveWallet,
-  ledgerWallet,
-  phantomWallet,
-  argentWallet,
-  uniswapWallet,
-  okxWallet,
-  binanceWallet,
-  bitgetWallet,
-  coreWallet,
-  tahoWallet,
-  rabbyWallet,
-  oneKeyWallet,
-  zerionWallet,
-  imTokenWallet,
-  tokenPocketWallet,
+  safeWallet,
+  walletConnectWallet,
+  zerionWallet
 } from '@rainbow-me/rainbowkit/wallets';
+import type { Chain, Transport } from 'viem';
+import { cookieStorage, createConfig, createStorage, fallback, http } from 'wagmi';
+import {
+  arbitrum,
+  arbitrumSepolia,
+  base,
+  baseSepolia,
+  celo,
+  mainnet,
+  optimism,
+  optimismSepolia,
+  sepolia,
+  zora,
+  zoraSepolia
+} from 'wagmi/chains';
 
-// Configure wallet connectors with grouping
-const connectors = connectorsForWallets(
-  [
-    {
-      groupName: 'Popular',
-      wallets: [
-        metaMaskWallet,
-        walletConnectWallet,
-        coinbaseWallet,
-        rainbowWallet,
-        trustWallet,
-      ],
-    },
-    {
-      groupName: 'DeFi & Trading',
-      wallets: [
-        uniswapWallet,
-        argentWallet,
-        zerionWallet,
-        phantomWallet,
-        okxWallet,
-      ],
-    },
-    {
-      groupName: 'Exchange Wallets',
-      wallets: [
-        binanceWallet,
-        bitgetWallet,
-        coreWallet,
-      ],
-    },
-    {
-      groupName: 'Hardware & Security',
-      wallets: [
-        ledgerWallet,
-        oneKeyWallet,
-        braveWallet,
-      ],
-    },
-    {
-      groupName: 'Mobile Wallets',
-      wallets: [
-        tahoWallet,
-        rabbyWallet,
-        imTokenWallet,
-        tokenPocketWallet,
-      ],
-    },
-  ],
-  {
-    appName: 'Devoter App',
-    projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'your-project-id',
-  }
-);
+export function getConfig(options?: { projectId?: string }) {
+  const projectId = options?.projectId || '';
 
-const config = createConfig({
-  connectors,
-  chains: [mainnet, polygon, optimism, arbitrum, base],
-  transports: {
-    [mainnet.id]: http(),
-    [polygon.id]: http(),
-    [optimism.id]: http(),
-    [arbitrum.id]: http(),
-    [base.id]: http(),
-  },
-  ssr: true,
-});
+  const wagmiChains = [
+    mainnet,
+    sepolia,
+    base,
+    baseSepolia,
+    optimism,
+    optimismSepolia,
+    arbitrum,
+    arbitrumSepolia,
+    zora,
+    zoraSepolia,
+    celo
+  ] as [Chain, ...Chain[]];
 
-export { config }; 
+  const transports = wagmiChains.reduce<Record<string, Transport>>((acc, chain) => {
+    try {
+      acc[chain.id] = fallback([http()]);
+      return acc;
+    } catch (err) {
+      console.error(err);
+      acc[chain.id] = http();
+      return acc;
+    }
+  }, {});
+
+  const connectors = connectorsForWallets(
+    [
+      {
+        groupName: 'Popular',
+        wallets: [metaMaskWallet, rainbowWallet, safeWallet, coinbaseWallet, walletConnectWallet, zerionWallet, injectedWallet]
+      },
+      
+    ],
+    {
+      appName: 'Devoter App',
+      projectId,
+      appDescription: 'Devoter App',
+      appUrl: 'https://devoter.app',
+      appIcon: 'https://devoter.xyz/images/icon.png',
+      walletConnectParameters: {
+        metadata: {
+          name: 'Devoter App',
+          description: 'Devoter App',
+          url: 'https://devoter.xyz',
+          icons: ['https://devoter.xyz/images/icon.png']
+        }
+      }
+    }
+  );
+  const config = createConfig({
+    connectors,
+    chains: wagmiChains,
+    transports,
+    ssr: true,
+    storage: createStorage({ storage: cookieStorage })
+  });
+
+  return config;
+}

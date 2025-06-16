@@ -1,5 +1,5 @@
-import { SignInHeader } from './components/SignInHeader';
 import { SignInForm } from './components/SignInForm';
+import { SignInHeader } from './components/SignInHeader';
 
 export function SignInPageContent() {
   return (
@@ -11,5 +11,3 @@ export function SignInPageContent() {
     </div>
   );
 }
-
-export default SignInPageContent; 

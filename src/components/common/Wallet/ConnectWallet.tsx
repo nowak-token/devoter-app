@@ -1,58 +1,67 @@
 'use client';
 
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useSignMessage } from 'wagmi';
-import { SiweMessage } from 'siwe';
-import { useEffect, useState } from 'react';
+import { signInAction } from '@/actions/auth/signin/action';
+import { signOutAction } from '@/actions/auth/signout/action';
+import { useSession } from '@/components/providers/SessionProvider';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { useSession } from '@/components/providers/SessionProvider';
+import { useConnectModal } from '@rainbow-me/rainbowkit';
+import { useAction } from 'next-safe-action/hooks';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+import { SiweMessage } from 'siwe';
+import { getAddress } from 'viem';
+import { useAccount, useSignMessage } from 'wagmi';
 
 export function ConnectWallet() {
-  const { address, isConnected } = useAccount();
-  const { user, isLoading, signIn, signOut } = useSession();
+  const { executeAsync: signIn } = useAction(signInAction);
+  const { executeAsync: signOut } = useAction(signOutAction);
+  const { address, chainId, isConnected } = useAccount();
+  const { user, isLoading } = useSession();
   const { signMessageAsync } = useSignMessage();
   const { toast } = useToast();
-  const [isSigning, setIsSigning] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const { openConnectModal } = useConnectModal();
+  const router = useRouter();
 
-  // Auto-sign in when wallet is connected
-  useEffect(() => {
-    if (isConnected && address && !user && !isLoading) {
-      handleSignIn();
-    }
-  }, [isConnected, address, user, isLoading]);
-
-  const handleSignIn = async () => {
-    if (!address) return;
+  const handleSignIn = useCallback(async (_address: string) => {
+    if (!_address) return;
 
     try {
-      setIsSigning(true);
+      const nonce = crypto.randomUUID();
       
       const message = new SiweMessage({
         domain: window.location.host,
-        address,
+        address: getAddress(_address),
         statement: 'Sign in with Ethereum to access Devoter App.',
         uri: window.location.origin,
         version: '1',
-        chainId: 8453, // Base chain ID
-        nonce: await fetch('/api/auth/nonce').then(res => res.json()).then(data => data.nonce),
+        chainId: chainId ?? 8453,
+        nonce: nonce,
+        issuedAt: new Date().toISOString(),
       });
+
+      const preparedMessage = message.prepareMessage();
 
       const signature = await signMessageAsync({
-        message: message.prepareMessage(),
+        message: preparedMessage,
       });
 
-      const success = await signIn(
-        JSON.stringify(message),
-        signature,
-        message.nonce
-      );
+      debugger;
 
-      if (success) {
+      const success = await signIn({
+        message: JSON.stringify(message),
+        signature,
+        nonce,
+      });
+
+      if (success.data) {
         toast({
           title: 'Successfully connected',
-          description: `Welcome! You're now signed in with ${address.slice(0, 6)}...${address.slice(-4)}`,
+          description: `Welcome! You're now signed in with ${_address.slice(0, 6)}...${_address.slice(-4)}`,
         });
+
+        router.push('/');
       } else {
         toast({
           title: 'Authentication failed',
@@ -64,21 +73,68 @@ export function ConnectWallet() {
       console.error('Sign in error:', error);
       toast({
         title: 'Authentication failed',
-        description: 'Failed to sign in with your wallet.',
+        description: error instanceof Error ? error.message : 'Failed to sign in with your wallet.',
         variant: 'destructive',
       });
     } finally {
-      setIsSigning(false);
+      setIsConnecting(false);
+    }
+  }, [chainId, signMessageAsync, signIn, router, toast]);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast({
+        title: 'Signed out',
+        description: 'You have been successfully signed out.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Sign out failed',
+        description: error instanceof Error ? error.message : 'Failed to sign out.',
+        variant: 'destructive',
+      });
     }
   };
 
-  const handleSignOut = async () => {
-    await signOut();
-    toast({
-      title: 'Signed out',
-      description: 'You have been successfully signed out.',
-    });
-  };
+  const handleClick = useCallback(async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    if (!openConnectModal) {
+      toast({
+        title: 'Connection unavailable',
+        description: 'Please wait a moment and try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    setIsConnecting(true);
+
+    try {
+      if (!address || !isConnected) {
+        openConnectModal();
+      } else {
+        await handleSignIn(address);
+      }
+    } catch (error) {
+      console.error('Connection error:', error);
+      toast({
+        title: 'Connection failed',
+        description: error instanceof Error ? error.message : 'Failed to connect wallet.',
+        variant: 'destructive',
+      });
+      setIsConnecting(false);
+    }
+  }, [address, isConnected, openConnectModal, handleSignIn, toast]);
+
+  // Handle successful wallet connection
+  useEffect(() => {
+    if (address && isConnected && isConnecting && !user) {
+      handleSignIn(address);
+    }
+  }, [address, isConnected, isConnecting, user, handleSignIn]);
 
   if (isLoading) {
     return (
@@ -92,7 +148,7 @@ export function ConnectWallet() {
     return (
       <div className="flex items-center gap-2">
         <span className="text-sm text-gray-600">
-          {user.address.slice(0, 6)}...{user.address.slice(-4)}
+          {user.walletAddress.slice(0, 6)}...{user.walletAddress.slice(-4)}
         </span>
         <Button onClick={handleSignOut} variant="outline" size="sm">
           Sign Out
@@ -101,11 +157,16 @@ export function ConnectWallet() {
     );
   }
 
-  // Use the official RainbowKit ConnectButton
   return (
     <div className="flex items-center gap-2">
-      <ConnectButton />
-      {isSigning && (
+      <Button 
+        onClick={handleClick}
+        disabled={isConnecting}
+        className="min-w-[200px] cursor-pointer"
+      >
+        {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+      </Button>
+      {isConnecting && (
         <span className="text-sm text-gray-500">Signing...</span>
       )}
     </div>

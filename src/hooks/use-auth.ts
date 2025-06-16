@@ -1,7 +1,7 @@
 'use client';
 
-import { useAccount } from 'wagmi';
 import { useSession } from '@/components/providers/SessionProvider';
+import { useAccount } from 'wagmi';
 
 export function useAuth() {
   const { address, isConnected } = useAccount();
