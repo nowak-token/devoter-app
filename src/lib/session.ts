@@ -55,7 +55,7 @@ export async function getSession() {
 
 export async function setSessionCookie(session: SessionData): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.set(COOKIE_NAME, JSON.stringify(session), {
+  cookieStore.set(COOKIE_NAME, encryptSession(session), {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',

@@ -1,5 +1,6 @@
+import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromCookies } from '@/lib/auth';
+import { COOKIE_NAME } from './lib/constants';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -18,13 +19,14 @@ export async function middleware(request: NextRequest) {
   const protectedRoutes = ['/submit-repo', '/leaderboard'];
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
 
+  const cookieStore = await cookies();
+  const session = cookieStore.get(COOKIE_NAME);
+
   if (isProtectedRoute) {
     try {
-      const session = await getSessionFromCookies();
-      
       if (!session) {
         // Redirect to sign-in page
-        const signInUrl = new URL('/auth/signin', request.url);
+        const signInUrl = new URL('/signin', request.url);
         signInUrl.searchParams.set('callbackUrl', pathname);
         return NextResponse.redirect(signInUrl);
       }
@@ -34,6 +36,8 @@ export async function middleware(request: NextRequest) {
       const signInUrl = new URL('/auth/signin', request.url);
       return NextResponse.redirect(signInUrl);
     }
+  } else if (pathname === '/signin' && session) {
+    return NextResponse.redirect(new URL('/', request.url));
   }
 
   return NextResponse.next();
