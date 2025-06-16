@@ -1,10 +1,10 @@
 'use server';
 
 import { signInSchema } from '@/actions/auth/signin/schema';
-import { authActionClient } from '@/lib/actions';
+import { actionClient } from '@/lib/actions';
 import { signIn } from './logic';
 
-export const signInAction = authActionClient
+export const signInAction = actionClient
   .inputSchema(signInSchema)
   .action(async ({ parsedInput }) => {
     try {

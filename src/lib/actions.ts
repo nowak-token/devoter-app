@@ -17,21 +17,23 @@ export const actionClient = actionClientBase
     const session = await getSession();
     const headerList = await headers();
 
-    if (!session) {
-      throw new Error('You are not logged in. Please try to login');
-    }
-
-    if (session.expiresAt < Date.now()) {
-      throw new Error('Session expired. Please try to login again');
-    }
-
     return next({
       ctx: { session, headers: headerList }
     });
   });
 
 export const authActionClient = actionClient.use(async ({ next, ctx }) => {
-  const userId = ctx.session?.userId;
+  const session = ctx.session;
+
+  if (!session) {
+    throw new Error('You are not logged in. Please try to login');
+  }
+
+  if (session.expiresAt < Date.now()) {
+    throw new Error('Session expired. Please try to login again');
+  }
+  
+  const userId = session?.userId;
 
   if (!userId) {
     throw new Error('You are not logged in. Please try to login');

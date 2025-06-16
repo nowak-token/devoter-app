@@ -1,5 +1,6 @@
 'use client';
 
+import { getNonceAction } from '@/actions/auth/nonce/action';
 import { signInAction } from '@/actions/auth/signin/action';
 import { signOutAction } from '@/actions/auth/signout/action';
 import { useSession } from '@/components/providers/SessionProvider';
@@ -27,30 +28,42 @@ export function ConnectWallet() {
   const handleSignIn = useCallback(async (_address: string) => {
     if (!_address) return;
 
+    const { data: nonce } = await getNonceAction();
+
+    if (!nonce) {
+      toast({
+        title: 'Authentication failed',
+        description: 'Failed to get nonce.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
-      const nonce = crypto.randomUUID();
-      
-      const message = new SiweMessage({
+      // Create the SIWE message
+      const messageObject = {
         domain: window.location.host,
         address: getAddress(_address),
-        statement: 'Sign in with Ethereum to access Devoter App.',
         uri: window.location.origin,
         version: '1',
-        chainId: chainId ?? 8453,
+        chainId: chainId ?? 1,
         nonce: nonce,
         issuedAt: new Date().toISOString(),
-      });
+        statement: 'Sign in with Ethereum to access Devoter App.',
+      };
 
+      // Create and prepare the message for signing
+      const message = new SiweMessage(messageObject);
       const preparedMessage = message.prepareMessage();
 
+      // Get the signature
       const signature = await signMessageAsync({
         message: preparedMessage,
       });
 
-      debugger;
-
+      // Send the original message object for verification
       const success = await signIn({
-        message: JSON.stringify(message),
+        message: JSON.stringify(messageObject),
         signature,
         nonce,
       });
