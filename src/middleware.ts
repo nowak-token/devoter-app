@@ -17,23 +17,18 @@ export async function middleware(request: NextRequest) {
 
   // Protected routes that require authentication
   const protectedRoutes = ['/submit-repo', '/leaderboard'];
+  // const protectedRoutes = ['/leaderboard'];
+
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
 
   const cookieStore = await cookies();
   const session = cookieStore.get(COOKIE_NAME);
 
   if (isProtectedRoute) {
-    try {
-      if (!session) {
-        // Redirect to sign-in page
-        const signInUrl = new URL('/signin', request.url);
-        signInUrl.searchParams.set('callbackUrl', pathname);
-        return NextResponse.redirect(signInUrl);
-      }
-    } catch (error) {
-      console.error('Middleware error:', error);
-      // Redirect to sign-in page on error
-      const signInUrl = new URL('/auth/signin', request.url);
+    if (!session) {
+      // Redirect to sign-in page
+      const signInUrl = new URL('/signin', request.url);
+      signInUrl.searchParams.set('callbackUrl', pathname);
       return NextResponse.redirect(signInUrl);
     }
   } else if (pathname === '/signin' && session) {
