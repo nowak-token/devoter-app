@@ -17,18 +17,21 @@ import { GitBranch, Github } from 'lucide-react';
 import { useAction } from 'next-safe-action/hooks';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { Payment } from '@/components/common/Payment';
+import { createPaymentAction } from '@/actions/payment/create-payment/action';
 
 export function SubmitRepoForm() {
-  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const { executeAsync: createRepository } = useAction(createRepositoryAction);
+  const { executeAsync: createRepository, status: createRepositoryStatus } = useAction(createRepositoryAction);
+  const { executeAsync: createPayment, status: createPaymentStatus } = useAction(createPaymentAction);
   const {
     execute: getSubmissionCount,
     result: submissionCountData,
     status: submissionCountStatus
   } = useAction(getRepositorySubmissionCountAction);
   const submissionCount = submissionCountData?.data?.count ?? 0;
-  const canSubmit = submissionCount < 3;
+  const canSubmit = submissionCount < 1;
+  const isLoading = createRepositoryStatus === 'executing' || createPaymentStatus === 'executing';
 
   useEffect(() => {
     getSubmissionCount();
@@ -43,37 +46,41 @@ export function SubmitRepoForm() {
     }
   });
 
-  async function onSubmit(values: CreateRepositoryInput) {
-    setIsLoading(true);
-
+    async function onPaymentSuccess(txHash: string) {
+    const values = form.getValues();
     try {
-      await createRepository(values);
-
-      toast({
-        title: 'Repository submitted successfully!',
-        description: `Your repository has been submitted for voting.`,
-        variant: 'default'
+      const payment = await createPayment({
+        amount: 0.01,
+        transactionHash: txHash,
       });
 
-      form.reset();
-      getSubmissionCount();
+      if (payment?.data?.paymentRecord?.id) {
+        await createRepository({
+          ...values,
+          paymentId: payment.data.paymentRecord.id,
+        });
+        toast({
+          title: 'Repository submitted successfully!',
+          description: `Your repository has been submitted for voting.`,
+          variant: 'default'
+        });
+        form.reset();
+        getSubmissionCount();
+      }
     } catch (error) {
       console.error('Submission error:', error);
-
       toast({
         title: 'Submission failed',
         description: error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.',
         variant: 'destructive'
       });
-    } finally {
-      setIsLoading(false);
     }
   }
 
   return (
     <div className='space-y-8'>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-6'>
+        <form className='space-y-6'>
           <FormField
             control={form.control}
             name='title'
@@ -133,7 +140,7 @@ export function SubmitRepoForm() {
                         <GitBranch className='mr-2 h-4 w-4' />
                         <span>
                           <span className='font-bold text-primary'>
-                            {submissionCount} / 3
+                            {submissionCount} / 1
                           </span>{' '}
                           repositories submitted this week.
                         </span>
@@ -149,16 +156,20 @@ export function SubmitRepoForm() {
                 </div>
               </TooltipTrigger>
               <TooltipContent>
-                <p>You can only submit a maximum of 3 repositories each week.</p>
+                <p>You can only submit one repository each week.</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <FormSubmit
-            disabled={isLoading || !form.formState.isValid || !canSubmit}
-            isLoading={isLoading}
-          >
-            {canSubmit ? 'Submit' : 'Submission Limit Reached'}
-          </FormSubmit>
+          {canSubmit ? (
+            <Payment onPaymentSuccess={onPaymentSuccess} isLoading={isLoading} />
+          ) : (
+            <FormSubmit
+              disabled={true}
+              isLoading={false}
+            >
+              Submission Limit Reached
+            </FormSubmit>
+          )}
         </form>
       </Form>
     </div>
