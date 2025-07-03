@@ -4,8 +4,9 @@ import { Decimal } from '@prisma/client/runtime/library';
 import crypto from 'crypto';
 import { Wallet } from 'ethers';
 import { SiweMessage } from 'siwe';
-import { signIn } from '../src/actions/auth/signin/logic';
-import { createRepository } from '../src/actions/repository/createRepository/logic';
+import { signIn } from '@/actions/auth/signin/logic';
+import { createRepository } from '@/actions/repository/createRepository/logic';
+import { archiveWeeklyLeaderboard } from '@/actions/leaderboard/archive/logic';
 
 const prisma = new PrismaClient();
 
@@ -29,8 +30,8 @@ function weekString(date: Date): string {
 }
 
 function randomTokenDecimal(min: number, max: number, precision = 6) {
-  const factor = 10 ** precision;
-  const random = Math.floor(faker.number.float({ min, max, precision: 1 / factor }) * factor) / factor;
+  const multipleOf = 1 / 10 ** precision;
+  const random = faker.number.float({ min, max, multipleOf });
   return new Decimal(random.toString());
 }
 
@@ -56,11 +57,14 @@ async function main() {
       const message = siweMessage.prepareMessage();
       const signature = await wallet.signMessage(message);
 
-      return signIn({
-        message,
-        signature,
-        nonce: siweMessage.nonce
-      });
+      return signIn(
+        {
+          message: JSON.stringify(siweMessage),
+          signature,
+          nonce: siweMessage.nonce,
+        },
+        { setCookie: false }
+      );
     })
   );
   console.log(`Inserted ${users.length} users`);
@@ -73,6 +77,10 @@ async function main() {
   // -------------------------------------------------------------------------
   for (let i = 0; i < NUM_REPOS; i++) {
     const submitter = faker.helpers.arrayElement(users);
+
+    if (!submitter) {
+      return;
+    }
 
     // Submission takes place within the last 120 days
     const repoCreated = faker.date.recent({ days: 120 });
@@ -89,14 +97,15 @@ async function main() {
       .replace(/\s+/g, '-')
       .replace(/[^a-z0-9-._]/g, '');
 
-    const repository = await createRepository(
+    await createRepository(
       {
         title,
         description,
         githubUrl: `https://github.com/${owner}/${repoName}`,
         tokenAmount: submissionFee
       },
-      submitter.id
+      submitter.id,
+      { createdAt: repoCreated }
     );
 
     // Keep running totals for leaderboard creation later
@@ -105,12 +114,53 @@ async function main() {
     }
   }
 
-  main()
-    .catch((e) => {
-      console.error(e);
-      process.exit(1);
-    })
-    .finally(async () => {
-      await prisma.$disconnect();
-    });
+  // -------------------------------------------------------------------------
+  // 3. Votes (with Payments)
+  // -------------------------------------------------------------------------
+  const repos = await prisma.repository.findMany();
+  for (const repo of repos) {
+    // Each repo gets a random number of votes
+    const numVotes = faker.number.int({ min: 1, max: MAX_VOTES_PER_REPO });
+    const voters = faker.helpers.arrayElements(users, numVotes);
+
+    for (const voter of voters) {
+      const votingWeek = weekString(repo.createdAt);
+      const tokenAmount = randomTokenDecimal(0.1, 10);
+
+      const vote = await prisma.vote.create({
+        data: {
+          userId: voter!.id,
+          repositoryId: repo.id,
+          tokenAmount,
+          week: votingWeek,
+        },
+      });
+
+      await prisma.payment.create({
+        data: {
+          userId: voter!.id,
+          walletAddress: voter!.walletAddress,
+          tokenAmount,
+          txHash: `0x${crypto.randomBytes(32).toString('hex')}`,
+          week: votingWeek,
+          voteId: vote.id,
+        },
+      });
+
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // 4. Weekly Leaderboards
+  // -------------------------------------------------------------------------
+  await archiveWeeklyLeaderboard();
 }
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
