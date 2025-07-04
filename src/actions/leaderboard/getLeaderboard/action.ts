@@ -7,3 +7,4 @@ import { getLeaderboardSchema } from './schema';
 export const getLeaderboardAction = actionClient.inputSchema(getLeaderboardSchema).action(async ({ parsedInput }) => {
   return getLeaderboard(parsedInput);
 });
+
