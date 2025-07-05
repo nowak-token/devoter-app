@@ -1,4 +1,4 @@
-import { RepositoryWithVotes } from '@/actions/repository/GetRepositories/logic';
+import { RepositoryWithVotes } from '@/actions/repository/getRepositories/logic';
 import { prisma } from '@/lib/db';
 import type { GetLeaderboardInput } from './schema';
 
@@ -20,10 +20,10 @@ export async function getLeaderboard(input: GetLeaderboardInput): Promise<Leader
           title: true,
           description: true,
           githubUrl: true,
-          submitter: true,
-          votes: {
+          totalVotes: true,
+          submitter: {
             select: {
-              tokenAmount: true
+              walletAddress: true
             }
           }
         }
@@ -35,11 +35,7 @@ export async function getLeaderboard(input: GetLeaderboardInput): Promise<Leader
     rank: entry.rank,
     repository: {
       ...entry.repository,
-      votes: entry.repository.votes.map(vote => ({
-        ...vote,
-        tokenAmount: vote.tokenAmount.toNumber()
-      })),
-      totalVotes: entry.repository.votes.reduce((acc, vote) => acc + vote.tokenAmount.toNumber(), 0)
+      votes: entry.repository.totalVotes
     }
   }));
 }
