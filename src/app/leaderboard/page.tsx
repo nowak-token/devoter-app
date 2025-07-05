@@ -1,27 +1,39 @@
 import { getLeaderboard } from '@/actions/leaderboard/getLeaderboard/logic';
 import { LeaderboardPageContent } from '@/components/pages/leaderboard';
-import { getCurrentWeek, type IsoWeek } from '@/lib/utils/date';
+import { getWeek, getWeeks, type IsoWeek } from '@/lib/utils/date';
 
 export const revalidate = 60;
 
 export default async function LeaderboardPage({
-  searchParams,
+  searchParams
 }: {
   searchParams: Promise<{
     week?: string;
+    page?: string;
   }>;
 }) {
-  const currentWeek = getCurrentWeek().weekString;
-  const week = ((await searchParams).week as IsoWeek) || currentWeek;
-  const leaderboard = await getLeaderboard({ week });
+  const { week: weekParam, page: pageParam } = await searchParams;
+  const currentPage = pageParam ? parseInt(pageParam, 10) : 1;
+  const currentWeek = getWeek(new Date());
+  const week = (weekParam as IsoWeek) || currentWeek;
+  const { leaderboard, total } = await getLeaderboard({
+    week,
+    page: currentPage,
+    pageSize: 10
+  });
+  const weeks = getWeeks();
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <main className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <main className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8 w-full flex-grow">
         <LeaderboardPageContent
           leaderboard={leaderboard}
+          weeks={weeks}
           currentWeek={currentWeek}
           selectedWeek={week}
+          total={total}
+          page={currentPage}
+          count={10}
         />
       </main>
     </div>
