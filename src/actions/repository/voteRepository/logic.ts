@@ -1,7 +1,10 @@
 'use server';
 
 import { updateWeeklyLeaderboard } from '@/actions/leaderboard/archive/logic';
+import { MINIMUM_VOTE_TOKEN_AMOUNT } from '@/lib/constants';
 import { prisma } from '@/lib/db';
+import { InsufficientTokenBalanceError } from '@/lib/errors';
+import { devTokenContract } from '@/lib/thirdweb';
 import { getWeek } from '@/lib/utils/date';
 import crypto from 'crypto';
 import { VoteRepositoryInput } from './schema';
@@ -15,6 +18,12 @@ export const voteRepository = async (input: VoteRepositoryInput, userId: string)
       where: { id: userId },
       select: { walletAddress: true }
     });
+
+    const balance = await (await devTokenContract).erc20.balanceOf(user.walletAddress);
+
+    if (parseInt(balance.displayValue || '0') < MINIMUM_VOTE_TOKEN_AMOUNT) {
+      throw new InsufficientTokenBalanceError();
+    }
 
     const vote = await tx.vote.create({
       data: {
