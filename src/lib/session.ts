@@ -41,14 +41,14 @@ export function decryptSession(encryptedData: string): SessionData {
   return JSON.parse(decrypted.toString('utf8'));
 }
 
-export async function getSession() {
+export async function getSession(): Promise<SessionData | null> {
+
   const cookieStore = await cookies();
   const session = cookieStore.get(COOKIE_NAME);
   try {
     return session ? decryptSession(session.value) : null;
   } catch (error) {
-    // If decryption fails (e.g. malformed cookie), treat as no session
-    console.warn('Failed to decrypt session:', error); // Optional: log this for debugging
+    console.warn('Failed to decrypt session:', error);
     return null;
   }
 }
