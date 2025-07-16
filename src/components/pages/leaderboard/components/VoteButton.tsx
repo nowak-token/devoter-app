@@ -3,13 +3,16 @@
 import { getTokenBalanceAction } from '@/actions/user/getTokenBalance/action';
 import { voteRepositoryAction } from '@/actions/vote/voteRepository/action';
 import { Button } from '@/components/ui/button';
-import { DEV_TOKEN_UNISWAP_URL } from '@/lib/constants';
+import { DEV_TOKEN_ADDRESS, DEV_TOKEN_UNISWAP_URL } from '@/lib/constants';
 import { InsufficientTokenBalanceError } from '@/lib/errors';
 import { Vote } from 'lucide-react';
 import { useAction } from 'next-safe-action/hooks';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
+import { ConfirmationDialog } from '@/components/dialogs/ConfirmationDialog';
+import { useWalletClient } from 'wagmi';
+import { transferDevTokens } from '@/lib/utils/wallet-transfer';
 
 interface VoteButtonProps {
   repositoryId: string;
@@ -18,11 +21,9 @@ interface VoteButtonProps {
 
 export const VoteButton = ({ repositoryId, hasVoted }: VoteButtonProps) => {
   const router = useRouter();
+  const { data: walletClient } = useWalletClient();
 
-  const {
-    execute: executeVote,
-    isExecuting: isVoting,
-  } = useAction(voteRepositoryAction, {
+  const { execute: executeVote, isExecuting: isVoting } = useAction(voteRepositoryAction, {
     onSuccess: () => {
       router.refresh();
       toast.success('Voted successfully!');
@@ -51,7 +52,7 @@ export const VoteButton = ({ repositoryId, hasVoted }: VoteButtonProps) => {
   const {
     execute: fetchTokenBalance,
     result: tokenBalanceResult,
-    isExecuting: isFetchingBalance,
+    isExecuting: isFetchingBalance
   } = useAction(getTokenBalanceAction);
 
   useEffect(() => {
@@ -60,15 +61,39 @@ export const VoteButton = ({ repositoryId, hasVoted }: VoteButtonProps) => {
 
   const tokenBalance = tokenBalanceResult?.data;
   const hasZeroBalance = tokenBalance !== undefined && parseFloat(tokenBalance) === 0;
+  const voteFee = tokenBalance ? (parseFloat(tokenBalance) * 0.0025).toFixed(4) : '0';
+
+  const handleVote = async () => {
+    if (!walletClient) {
+      toast.error('Please connect your wallet to vote.');
+      return;
+    }
+    try {
+      const txHash = await transferDevTokens(
+        walletClient,
+        DEV_TOKEN_ADDRESS,
+        voteFee
+      );
+      executeVote({ repositoryId, txHash });
+    } catch {
+      toast.error('Transaction failed or was rejected.');
+    }
+  };
 
   return (
-    <Button
-      className='cursor-pointer'
-      disabled={hasVoted || isVoting || hasZeroBalance || isFetchingBalance}
-      onClick={() => executeVote({ repositoryId })}
-    >
-      <Vote className='h-4 w-4' />
-      {hasVoted ? 'Voted' : 'Vote'}
-    </Button>
+    <ConfirmationDialog
+      trigger={
+        <Button
+          className='cursor-pointer'
+          disabled={hasVoted || isVoting || hasZeroBalance || isFetchingBalance}
+        >
+          <Vote className='h-4 w-4' />
+          {hasVoted ? 'Voted' : 'Vote'}
+        </Button>
+      }
+      title='Are you sure you want to vote?'
+      description={`You will be charged ${voteFee} DEV tokens for this vote.`}
+      onConfirm={handleVote}
+    />
   );
 };
